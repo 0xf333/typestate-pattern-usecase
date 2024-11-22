@@ -1,4 +1,6 @@
-use crate::constants::*;
+use super::states::{Connected, DataFetched, Unconnected};
+use super::types::StablecoinMetrics;
+use crate::constants::{USDC_ADDRESS, USDT_ADDRESS};
 use dotenv::dotenv;
 use ethers::{
     abi::Abi,
@@ -11,27 +13,20 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::Arc;
 
-pub struct Uninitialized;
-pub struct Connected;
-pub struct DataFetched;
-
-#[derive(Debug)]
-pub struct StablecoinMetrics {
-    pub name: String,
-    pub total_supply: U256,
-    pub decimals: u8,
-}
-
-pub struct StablecoinMonitor<State> {
+pub struct StablecoinMonitor<State = Unconnected> {
     provider: Option<Arc<Provider<Http>>>,
     metrics: Option<Vec<StablecoinMetrics>>,
     state: PhantomData<State>,
 }
 
-impl StablecoinMonitor<Uninitialized> {
+impl Default for StablecoinMonitor<Unconnected> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StablecoinMonitor<Unconnected> {
     pub fn new() -> Self {
-        println!("[SAFE] Creating new monitor in Uninitialized state");
-        println!("[SAFE] Only connect() method is available");
         Self {
             provider: None,
             metrics: None,
@@ -40,12 +35,10 @@ impl StablecoinMonitor<Uninitialized> {
     }
 
     pub async fn connect(self) -> Result<StablecoinMonitor<Connected>, Box<dyn std::error::Error>> {
-        println!("[SAFE] Attempting to connect to Ethereum network...");
+        println!("[SAFE] Attempting to connect...");
 
         dotenv().ok();
         let api_key = env::var("ALCHEMY_API_KEY")?;
-        println!("[SAFE] Found API key, initializing provider...");
-
         let provider = Provider::<Http>::try_from(format!(
             "https://eth-mainnet.g.alchemy.com/v2/{}",
             api_key
@@ -66,10 +59,10 @@ impl StablecoinMonitor<Connected> {
     pub async fn fetch_data(
         self,
     ) -> Result<StablecoinMonitor<DataFetched>, Box<dyn std::error::Error>> {
-        println!("[SAFE] Starting data fetch with valid provider");
+        println!("[SAFE] Fetching data...");
 
-        let provider = self.provider.unwrap();
-        let mut metrics = Vec::new();
+        let provider = self.provider.as_ref().unwrap();
+
         let abi: Abi = serde_json::from_str(
             r#"[
             {"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"type":"function"},
@@ -77,8 +70,9 @@ impl StablecoinMonitor<Connected> {
         ]"#,
         )?;
 
+        let mut metrics = Vec::new();
         for (address, name) in [(USDT_ADDRESS, "USDT"), (USDC_ADDRESS, "USDC")] {
-            println!("[SAFE] 🔄 Querying {} at {}", name, address);
+            println!("[SAFE] Fetching {} data...", name);
             let contract =
                 Contract::new(Address::from_str(address)?, abi.clone(), provider.clone());
 
@@ -87,7 +81,6 @@ impl StablecoinMonitor<Connected> {
                 .call()
                 .await?;
             let decimals: u8 = contract.method::<_, u8>("decimals", ())?.call().await?;
-            println!("[SAFE] ✅ Got {} data", name);
 
             metrics.push(StablecoinMetrics {
                 name: name.to_string(),
@@ -100,7 +93,7 @@ impl StablecoinMonitor<Connected> {
         println!("[SAFE] Only display_results() is now available");
 
         Ok(StablecoinMonitor {
-            provider: Some(provider),
+            provider: Some(provider.clone()),
             metrics: Some(metrics),
             state: PhantomData,
         })

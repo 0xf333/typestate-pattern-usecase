@@ -1,4 +1,5 @@
-use crate::constants::*;
+use super::types::StablecoinMetrics;
+use crate::constants::{USDC_ADDRESS, USDT_ADDRESS};
 use dotenv::dotenv;
 use ethers::{
     abi::Abi,
@@ -10,16 +11,15 @@ use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 
-#[derive(Debug)]
-pub struct StablecoinMetrics {
-    pub name: String,
-    pub total_supply: U256,
-    pub decimals: u8,
-}
-
 pub struct StablecoinMonitor {
     provider: Option<Arc<Provider<Http>>>,
     metrics: Option<Vec<StablecoinMetrics>>,
+}
+
+impl Default for StablecoinMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StablecoinMonitor {

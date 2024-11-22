@@ -1,31 +1,8 @@
-use crate::{safe_monitor, unsafe_monitor};
-use axum::{http::StatusCode, response::Json, routing::get, Router};
-use std::net::SocketAddr;
-use tower_http::cors::CorsLayer;
+use crate::monitors::{SafeMonitor, UnsafeMonitor};
+use axum::{http::StatusCode, response::Json};
 
-pub async fn run_server() {
-    let app = Router::new()
-        .route("/api/unsafe", get(unsafe_monitor_handler))
-        .route("/api/safe", get(safe_monitor_handler))
-        .layer(CorsLayer::permissive())
-        .fallback_service(tower_http::services::ServeDir::new("static"));
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    println!("Server running on http://localhost:3000");
-
-    println!("\nServer logs:");
-    println!("=============");
-
-    axum::serve(
-        tokio::net::TcpListener::bind(&addr).await.unwrap(),
-        app.into_make_service(),
-    )
-    .await
-    .unwrap();
-}
-
-async fn unsafe_monitor_handler() -> Result<Json<Vec<String>>, StatusCode> {
-    let mut monitor = unsafe_monitor::StablecoinMonitor::new();
+pub async fn unsafe_monitor_handler() -> Result<Json<Vec<String>>, StatusCode> {
+    let mut monitor = UnsafeMonitor::new();
 
     println!("\n[UNSAFE] Attempting operation without proper setup...");
     println!("[UNSAFE] Trying to fetch data without connecting first...");
@@ -44,10 +21,10 @@ async fn unsafe_monitor_handler() -> Result<Json<Vec<String>>, StatusCode> {
     Ok(Json(output))
 }
 
-async fn safe_monitor_handler() -> Result<Json<Vec<String>>, StatusCode> {
+pub async fn safe_monitor_handler() -> Result<Json<Vec<String>>, StatusCode> {
     println!("\n[SAFE] Starting type-state enforced operation...");
 
-    let monitor = safe_monitor::StablecoinMonitor::new()
+    let monitor = SafeMonitor::new()
         .connect()
         .await
         .map_err(|e| {
