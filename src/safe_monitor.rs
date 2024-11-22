@@ -1,15 +1,15 @@
 use crate::constants::*;
-use ethers::{
-    providers::{Provider, Http},
-    types::{Address, U256},
-    contract::Contract,
-    abi::Abi,
-};
-use std::sync::Arc;
-use std::str::FromStr;
 use dotenv::dotenv;
+use ethers::{
+    abi::Abi,
+    contract::Contract,
+    providers::{Http, Provider},
+    types::{Address, U256},
+};
 use std::env;
 use std::marker::PhantomData;
+use std::str::FromStr;
+use std::sync::Arc;
 
 pub struct Uninitialized;
 pub struct Connected;
@@ -30,6 +30,8 @@ pub struct StablecoinMonitor<State> {
 
 impl StablecoinMonitor<Uninitialized> {
     pub fn new() -> Self {
+        println!("[SAFE] Creating new monitor in Uninitialized state");
+        println!("[SAFE] Only connect() method is available");
         Self {
             provider: None,
             metrics: None,
@@ -38,12 +40,20 @@ impl StablecoinMonitor<Uninitialized> {
     }
 
     pub async fn connect(self) -> Result<StablecoinMonitor<Connected>, Box<dyn std::error::Error>> {
+        println!("[SAFE] Attempting to connect to Ethereum network...");
+
         dotenv().ok();
         let api_key = env::var("ALCHEMY_API_KEY")?;
-        let provider = Provider::<Http>::try_from(
-            format!("https://eth-mainnet.g.alchemy.com/v2/{}", api_key)
-        )?;
-        
+        println!("[SAFE] Found API key, initializing provider...");
+
+        let provider = Provider::<Http>::try_from(format!(
+            "https://eth-mainnet.g.alchemy.com/v2/{}",
+            api_key
+        ))?;
+
+        println!("[SAFE] ✅ Connected! Transitioning to Connected state");
+        println!("[SAFE] Only fetch_data() is now available");
+
         Ok(StablecoinMonitor {
             provider: Some(Arc::new(provider)),
             metrics: None,
@@ -53,26 +63,31 @@ impl StablecoinMonitor<Uninitialized> {
 }
 
 impl StablecoinMonitor<Connected> {
-    pub async fn fetch_data(self) -> Result<StablecoinMonitor<DataFetched>, Box<dyn std::error::Error>> {
+    pub async fn fetch_data(
+        self,
+    ) -> Result<StablecoinMonitor<DataFetched>, Box<dyn std::error::Error>> {
+        println!("[SAFE] Starting data fetch with valid provider");
+
         let provider = self.provider.unwrap();
         let mut metrics = Vec::new();
-        let abi: Abi = serde_json::from_str(r#"[
+        let abi: Abi = serde_json::from_str(
+            r#"[
             {"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"type":"function"},
             {"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"}
-        ]"#)?;
+        ]"#,
+        )?;
 
-        for (address, name) in [
-            (USDT_ADDRESS, "USDT"),
-            (USDC_ADDRESS, "USDC"),
-        ] {
-            let contract = Contract::new(
-                Address::from_str(address)?,
-                abi.clone(),
-                provider.clone(),
-            );
+        for (address, name) in [(USDT_ADDRESS, "USDT"), (USDC_ADDRESS, "USDC")] {
+            println!("[SAFE] 🔄 Querying {} at {}", name, address);
+            let contract =
+                Contract::new(Address::from_str(address)?, abi.clone(), provider.clone());
 
-            let total_supply: U256 = contract.method::<_, U256>("totalSupply", ())?.call().await?;
+            let total_supply: U256 = contract
+                .method::<_, U256>("totalSupply", ())?
+                .call()
+                .await?;
             let decimals: u8 = contract.method::<_, u8>("decimals", ())?.call().await?;
+            println!("[SAFE] ✅ Got {} data", name);
 
             metrics.push(StablecoinMetrics {
                 name: name.to_string(),
@@ -80,6 +95,9 @@ impl StablecoinMonitor<Connected> {
                 decimals,
             });
         }
+
+        println!("[SAFE] ✅ All data fetched! Transitioning to DataFetched state");
+        println!("[SAFE] Only display_results() is now available");
 
         Ok(StablecoinMonitor {
             provider: Some(provider),
@@ -90,16 +108,17 @@ impl StablecoinMonitor<Connected> {
 }
 
 impl StablecoinMonitor<DataFetched> {
-    pub fn display_results(&self) {
+    pub fn display_results(&self) -> Vec<String> {
+        let mut output = Vec::new();
+        println!("[SAFE] Displaying final results:");
+
         let metrics = self.metrics.as_ref().unwrap();
-        println!("\nStablecoin Analysis Results");
-        println!("=========================================");
-        
         for metric in metrics {
             let supply = metric.total_supply.as_u128() as f64 / 10f64.powi(metric.decimals as i32);
-            println!("\n{}", metric.name);
-            println!("Total Supply: ${:.2}", supply);
+            let msg = format!("[SAFE] {} Supply: ${:.2}", metric.name, supply);
+            println!("{}", msg);
+            output.push(msg);
         }
-        println!();
+        output
     }
-} 
+}

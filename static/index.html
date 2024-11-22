@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Type State Use case</title>
+</head>
+<body>
+    <div class="container">
+        <h1>Type State Use case</h1>
+        <div class="button-container">
+            <button id="unsafe-btn">Without Type States</button>
+            <button id="safe-btn">With Type States</button>
+        </div>
+        <pre id="output">Click a button to start the demo...</pre>
+    </div>
+
+    <script>
+        const unsafeBtn = document.getElementById('unsafe-btn');
+        const safeBtn = document.getElementById('safe-btn');
+        const output = document.getElementById('output');
+
+        async function fetchData(endpoint) {
+            output.textContent = 'Loading...';
+            unsafeBtn.classList.add('loading');
+            safeBtn.classList.add('loading');
+
+            try {
+                const response = await fetch(`http://localhost:3000/api/${endpoint}`);
+                const data = await response.json();
+                output.textContent = data.join('\n');
+            } catch (error) {
+                output.textContent = `Error: ${error.message}`;
+            } finally {
+                unsafeBtn.classList.remove('loading');
+                safeBtn.classList.remove('loading');
+            }
+        }
+
+        unsafeBtn.addEventListener('click', () => fetchData('unsafe'));
+        safeBtn.addEventListener('click', () => fetchData('safe'));
+    </script>
+</body>
+</html> 
