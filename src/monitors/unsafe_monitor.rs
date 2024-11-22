@@ -1,14 +1,6 @@
+use super::common::{create_provider, fetch_stablecoin_metrics, format_supply};
 use super::types::StablecoinMetrics;
-use crate::constants::{USDC_ADDRESS, USDT_ADDRESS};
-use dotenv::dotenv;
-use ethers::{
-    abi::Abi,
-    contract::Contract,
-    providers::{Http, Provider},
-    types::{Address, U256},
-};
-use std::env;
-use std::str::FromStr;
+use ethers::providers::{Http, Provider};
 use std::sync::Arc;
 
 pub struct StablecoinMonitor {
@@ -38,13 +30,7 @@ impl StablecoinMonitor {
             output.push("[WARNING] Provider already exists!".to_string());
         }
 
-        dotenv().ok();
-        let api_key = env::var("ALCHEMY_API_KEY")?;
-        let provider = Provider::<Http>::try_from(format!(
-            "https://eth-mainnet.g.alchemy.com/v2/{}",
-            api_key
-        ))?;
-
+        let provider = create_provider()?;
         self.provider = Some(Arc::new(provider));
         output.push("[LOG] Connection successful".to_string());
         Ok(())
@@ -63,34 +49,7 @@ impl StablecoinMonitor {
             }
         };
 
-        let abi: Abi = serde_json::from_str(
-            r#"[
-            {"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"type":"function"},
-            {"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"}
-        ]"#,
-        )?;
-
-        let mut metrics = Vec::new();
-        for (address, name) in [(USDT_ADDRESS, "USDT"), (USDC_ADDRESS, "USDC")] {
-            output.push(format!("[LOG] Fetching data for {}", name));
-            let contract =
-                Contract::new(Address::from_str(address)?, abi.clone(), provider.clone());
-
-            let total_supply: U256 = contract
-                .method::<_, U256>("totalSupply", ())?
-                .call()
-                .await?;
-            let decimals: u8 = contract.method::<_, u8>("decimals", ())?.call().await?;
-
-            metrics.push(StablecoinMetrics {
-                name: name.to_string(),
-                total_supply,
-                decimals,
-            });
-            output.push(format!("[LOG] Successfully fetched {} data", name));
-        }
-
-        self.metrics = Some(metrics);
+        self.metrics = Some(fetch_stablecoin_metrics(provider.clone()).await?);
         Ok(())
     }
 
@@ -107,11 +66,11 @@ impl StablecoinMonitor {
             }
         };
 
-        for metric in metrics {
-            let supply = metric.total_supply.as_u128() as f64 / 10f64.powi(metric.decimals as i32);
-            output.push(format!("[DATA] {} Supply: ${:.2}", metric.name, supply));
-        }
-
+        output.extend(
+            format_supply(metrics)
+                .into_iter()
+                .map(|s| format!("[DATA] {}", s)),
+        );
         Ok(output)
     }
 }
