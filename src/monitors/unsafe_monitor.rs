@@ -1,10 +1,10 @@
 use super::common::{create_provider, fetch_stablecoin_metrics, format_supply};
 use super::types::StablecoinMetrics;
 use ethers::providers::{Http, Provider};
-use std::sync::Arc;
+use eyre::{eyre, Result};
 
 pub struct StablecoinMonitor {
-    provider: Option<Arc<Provider<Http>>>,
+    provider: Option<Provider<Http>>,
     metrics: Option<Vec<StablecoinMetrics>>,
 }
 
@@ -22,7 +22,7 @@ impl StablecoinMonitor {
         }
     }
 
-    pub async fn connect(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn connect(&mut self) -> Result<()> {
         let mut output = Vec::new();
         output.push("[LOG] Attempting to connect...".to_string());
 
@@ -31,29 +31,29 @@ impl StablecoinMonitor {
         }
 
         let provider = create_provider()?;
-        self.provider = Some(Arc::new(provider));
+        self.provider = Some(provider);
         output.push("[LOG] Connection successful".to_string());
         Ok(())
     }
 
-    pub async fn fetch_data(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn fetch_data(&mut self) -> Result<()> {
         let mut output = Vec::new();
         output.push("[LOG] Attempting to fetch data...".to_string());
 
         let provider = match self.provider.as_ref() {
             Some(p) => p,
             None => {
-                let err = "[ERROR] No provider found - connect() was not called first";
+                let err = "No provider found - connect() was not called first";
                 output.push(err.to_string());
-                return Err(err.into());
+                return Err(eyre!(err));
             }
         };
 
-        self.metrics = Some(fetch_stablecoin_metrics(provider.clone()).await?);
+        self.metrics = Some(fetch_stablecoin_metrics(provider).await?);
         Ok(())
     }
 
-    pub fn display_results(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    pub fn display_results(&self) -> Result<Vec<String>> {
         let mut output = Vec::new();
         output.push("[LOG] Attempting to display results...".to_string());
 
@@ -62,7 +62,7 @@ impl StablecoinMonitor {
             None => {
                 let err = "[ERROR] No metrics found - fetch_data() was not called first";
                 output.push(err.to_string());
-                return Err(err.into());
+                return Err(eyre!(err));
             }
         };
 

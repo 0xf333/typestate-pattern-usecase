@@ -2,32 +2,31 @@ use super::types::StablecoinMetrics;
 use crate::constants::{USDC_ADDRESS, USDT_ADDRESS};
 use dotenv::dotenv;
 use ethers::{
-    abi::Abi,
+    abi::{Abi, AbiParser},
     contract::Contract,
     providers::{Http, Provider},
     types::{Address, U256},
 };
+use eyre::Result;
 use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 
-pub fn get_stablecoin_abi() -> Result<Abi, serde_json::Error> {
-    serde_json::from_str(
-        r#"[
-            {"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"type":"function"},
-            {"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"type":"function"}
-        ]"#,
-    )
+pub fn get_stablecoin_abi() -> Result<Abi> {
+    let source = include_str!("../abis/tether.json");
+    let items: Vec<String> = serde_json::from_str(source)?;
+    let entries: Vec<&str> = items.iter().map(|s| s.as_str()).collect();
+    let abi = AbiParser::default().parse(&entries)?;
+    Ok(abi)
 }
 
-pub async fn fetch_stablecoin_metrics(
-    provider: Arc<Provider<Http>>,
-) -> Result<Vec<StablecoinMetrics>, Box<dyn std::error::Error>> {
+pub async fn fetch_stablecoin_metrics(provider: &Provider<Http>) -> Result<Vec<StablecoinMetrics>> {
     let abi = get_stablecoin_abi()?;
     let mut metrics = Vec::new();
 
+    let client = Arc::new(provider.clone());
     for (address, name) in [(USDT_ADDRESS, "USDT"), (USDC_ADDRESS, "USDC")] {
-        let contract = Contract::new(Address::from_str(address)?, abi.clone(), provider.clone());
+        let contract = Contract::new(Address::from_str(address)?, abi.clone(), client.clone());
 
         let total_supply: U256 = contract
             .method::<_, U256>("totalSupply", ())?
@@ -55,7 +54,7 @@ pub fn format_supply(metrics: &[StablecoinMetrics]) -> Vec<String> {
         .collect()
 }
 
-pub fn create_provider() -> Result<Provider<Http>, Box<dyn std::error::Error>> {
+pub fn create_provider() -> Result<Provider<Http>> {
     dotenv().ok();
     let api_key = env::var("ALCHEMY_API_KEY")?;
     let provider =

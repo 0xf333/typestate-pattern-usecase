@@ -15,10 +15,10 @@ pub fn create_router() -> Router {
 pub async fn run_server() {
     let app = create_router();
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    println!("Server running on http://localhost:3000");
+    println!("\n>>> Server running on http://localhost:3000");
 
     println!("\nServer logs:");
-    println!("=============");
+    println!("============");
 
     axum::serve(
         tokio::net::TcpListener::bind(&addr).await.unwrap(),

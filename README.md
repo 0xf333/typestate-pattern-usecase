@@ -16,6 +16,8 @@
 
 ### Unconnected -> Connected -> DataFetched
 
+> For more details please check [rust-embedded/static-guarantees](https://docs.rust-embedded.org/book/static-guarantees/typestate-programming.html) 
+
 ---
 
 ## Usage
